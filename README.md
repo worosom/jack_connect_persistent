@@ -1,4 +1,4 @@
 # jack_connect_persistent
 
-##TODOs
+## TODOs
 - Add support for defining ports via regular expressions
