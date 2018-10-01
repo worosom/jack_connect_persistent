@@ -25,20 +25,22 @@ bool ready = false;
 typedef void (*JackPortRegistrationCallback)(jack_port_id_t port, int /* register */, void* arg);
 typedef void (*JackPortConnectCallback)(jack_port_id_t a, jack_port_id_t b, int connect, void *arg);
 
-  void
-registration_cb (jack_port_id_t port, int register, void* arg)
-{
+void clientNotify() {
   std::unique_lock<std::mutex> lck (mtx);
   ready = true;
   cv.notify_all();
 }
 
   void
+port_registration_cb (jack_port_id_t port, int register, void* arg)
+{
+  clientNotify();
+}
+
+  void
 port_connect_cb (jack_port_id_t a, jack_port_id_t b, int connect, void *arg)
 {
-  std::unique_lock<std::mutex> lck (mtx);
-  ready = true;
-  cv.notify_all();
+  clientNotify();
 }
 
 /**
@@ -80,9 +82,8 @@ main (int argc, char *argv[])
     fprintf(stderr, "unique name `%s' assigned\n", client_name);
   }
 
-  // jack_set_client_registration_callback(client, registration_cb, 0);
+  jack_set_port_registration_callback(client, port_registration_cb, 0);
   jack_set_port_connect_callback(client, port_connect_cb, 0);
-  jack_set_port_registration_callback(client, registration_cb, 0);
 
   /* tell the JACK server to call `jack_shutdown()' if
      it ever shuts down, either entirely, or if it
@@ -105,7 +106,7 @@ main (int argc, char *argv[])
   std::unique_lock<std::mutex> lck(mtx);
 	while (true) {
 		if (jack_connect (client, argv[1], argv[2]) == 0) {
-      std::cout << "(re)connected " << argv[1] << " " << argv[2] << std::endl;
+      std::cout << "(re)connected " << argv[1] << " ➔ " << argv[2] << std::endl;
     }
 		ready = false;
 		while (!ready) {
