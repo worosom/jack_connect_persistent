@@ -2,4 +2,4 @@
 Like jack_connect, only persistent.
 
 ## TODOs
-- Add support for defining ports via regular expressions
+- <del>Add support for defining ports via regular expressions</del>

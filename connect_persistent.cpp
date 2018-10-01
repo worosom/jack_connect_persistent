@@ -12,11 +12,9 @@ extern "C" {
 #include <condition_variable> // std::condition_variable
 #include <chrono>
 
-jack_port_t *input_port;
-jack_port_t *output_port;
 jack_client_t *client;
-
-jack_nframes_t delay_index;
+const char **input_ports;
+const char **output_ports;
 
 std::mutex mtx;
 std::condition_variable cv;
@@ -42,6 +40,19 @@ port_connect_cb (jack_port_id_t a, jack_port_id_t b, int connect, void *arg)
 {
   clientNotify();
 }
+	void
+connect(char *argv[])
+{
+	output_ports = jack_get_ports(client, argv[1], NULL, JackPortIsOutput);
+	input_ports = jack_get_ports(client, argv[2], NULL, JackPortIsInput);
+	for (unsigned int i = 0; i < sizeof(input_ports); i++) {
+		if (jack_connect (client, output_ports[i], input_ports[i]) == 0) {
+			std::cout << "(re)connected " << output_ports[i] << " ➔ " << input_ports[i] << std::endl;
+		}
+		if (output_ports[i+1] == NULL)
+			break;
+	}
+}
 
 /**
  * JACK calls this shutdown_callback if the server ever shuts down or
@@ -54,8 +65,8 @@ jack_shutdown (void *arg)
   exit(1);
 }
 
-  int
-main (int argc, char *argv[])
+void
+init ()
 {
   const char *client_name = "persistent";
   const char *server_name = NULL;
@@ -100,14 +111,18 @@ main (int argc, char *argv[])
     exit(1);
   }
   std::cout << "client activated" << std::endl;
+}
+
+  int
+main (int argc, char *argv[])
+{
+	init();
 
   /* keep running until stopped by the user */
 
   std::unique_lock<std::mutex> lck(mtx);
 	while (true) {
-		if (jack_connect (client, argv[1], argv[2]) == 0) {
-      std::cout << "(re)connected " << argv[1] << " ➔ " << argv[2] << std::endl;
-    }
+		connect(argv);
 		ready = false;
 		while (!ready) {
 			cv.wait(lck);
