@@ -12,9 +12,13 @@ extern "C" {
 #include <condition_variable> // std::condition_variable
 #include <chrono>
 
-jack_client_t *client;
+const char *client_name = "persistent";
+const char *server_name = NULL;
 const char **input_ports;
 const char **output_ports;
+jack_options_t options = JackNullOption;
+jack_status_t status;
+jack_client_t *client;
 
 std::mutex mtx;
 std::condition_variable cv;
@@ -24,9 +28,11 @@ typedef void (*JackPortRegistrationCallback)(jack_port_id_t port, int /* registe
 typedef void (*JackPortConnectCallback)(jack_port_id_t a, jack_port_id_t b, int connect, void *arg);
 
 void clientNotify() {
-  std::unique_lock<std::mutex> lck (mtx);
-  ready = true;
-  cv.notify_all();
+  if (!ready) {
+    std::unique_lock<std::mutex> lck (mtx);
+    ready = true;
+    cv.notify_all();
+  }
 }
 
   void
@@ -40,18 +46,27 @@ port_connect_cb (jack_port_id_t a, jack_port_id_t b, int connect, void *arg)
 {
   clientNotify();
 }
+
+  void
+update_ports(char *argv[]) {
+  output_ports = jack_get_ports(client, argv[1], NULL, JackPortIsOutput);
+  input_ports = jack_get_ports(client, argv[2], NULL, JackPortIsInput);
+}
+
 	void
-connect(char *argv[])
+connect()
 {
-	output_ports = jack_get_ports(client, argv[1], NULL, JackPortIsOutput);
-	input_ports = jack_get_ports(client, argv[2], NULL, JackPortIsInput);
-	for (unsigned int i = 0; i < sizeof(input_ports); i++) {
-		if (jack_connect (client, output_ports[i], input_ports[i]) == 0) {
-			std::cout << "(re)connected " << output_ports[i] << " ➔ " << input_ports[i] << std::endl;
-		}
-		if (output_ports[i+1] == NULL)
-			break;
-	}
+  for (unsigned int i = 0; i < sizeof(output_ports); i++) {
+    if (output_ports == NULL || output_ports[i] == NULL)
+      return;
+    if (input_ports == NULL || input_ports[i] == NULL)
+      return;
+    jack_port_t *out_port = jack_port_by_name(client, output_ports[i]);
+      if (jack_connect(client, output_ports[i], input_ports[i]) == 0) {
+        std::cout << "(re)connected " << output_ports[i] << " ➔ " << input_ports[i] << std::endl;
+      }
+      std::cout << "(re)connected " << output_ports[i] << " ➔ " << input_ports[i] << std::endl;
+  }
 }
 
 /**
@@ -68,12 +83,6 @@ jack_shutdown (void *arg)
 void
 init ()
 {
-  const char *client_name = "persistent";
-  const char *server_name = NULL;
-  jack_options_t options = JackNullOption;
-  jack_status_t status;
-
-
   /* open a client connection to the JACK server */
 
   client = jack_client_open(client_name, options, &status, server_name);
@@ -114,7 +123,7 @@ init ()
 }
 
   int
-main (int argc, char *argv[])
+main (int argc, char **argv)
 {
 	init();
 
@@ -122,9 +131,13 @@ main (int argc, char *argv[])
 
   std::unique_lock<std::mutex> lck(mtx);
 	while (true) {
-		connect(argv);
+		update_ports(argv);
+		connect();
+    jack_free(output_ports);
+    jack_free(input_ports);
 		ready = false;
 		while (!ready) {
+      /* wait for notification thread */
 			cv.wait(lck);
 		}
 	}
