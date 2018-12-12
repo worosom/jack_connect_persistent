@@ -59,13 +59,14 @@ connect()
   for (unsigned int i = 0; i < sizeof(output_ports); i++) {
     if (output_ports == NULL || output_ports[i] == NULL)
       return;
-    if (input_ports == NULL || input_ports[i] == NULL)
+    unsigned int j = i % sizeof(input_ports);
+    if (input_ports == NULL || input_ports[j] == NULL)
       return;
     jack_port_t *out_port = jack_port_by_name(client, output_ports[i]);
-      if (jack_connect(client, output_ports[i], input_ports[i]) == 0) {
-        std::cout << "(re)connected " << output_ports[i] << " ➔ " << input_ports[i] << std::endl;
+      if (jack_connect(client, output_ports[i], input_ports[j]) == 0) {
+        std::cout << "(re)connected " << output_ports[i] << " ➔ " << input_ports[j] << std::endl;
       }
-      std::cout << "(re)connected " << output_ports[i] << " ➔ " << input_ports[i] << std::endl;
+      std::cout << "(re)connected " << output_ports[i] << " ➔ " << input_ports[j] << std::endl;
   }
 }
 
